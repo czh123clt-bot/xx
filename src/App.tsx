@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, X, Copy, Link as LinkIcon, Save, DownloadCloud } from 'lucide-react';
-import mqtt from 'mqtt/dist/mqtt.min';
+import mqtt from 'mqtt';
 
 type LightMode = 'on' | 'off' | 'sos' | 'strobe' | 'redirect' | 'ignore';
 
@@ -50,6 +50,8 @@ export default function App() {
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
   const syncTimeoutRef = useRef<number | null>(null);
   const lastEventIdRef = useRef<string | null>(null);
+  const tapCountRef = useRef<number>(0);
+  const tapTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -299,11 +301,20 @@ export default function App() {
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (isSettingsOpen) return;
+    
+    try {
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    } catch (err) {}
+    
     touchStartPos.current = { x: e.clientX, y: e.clientY };
 
     pressTimer.current = window.setTimeout(() => {
       if (!isAudience) {
         setIsSettingsOpen(true);
+      } else {
+        // Show a temporary hint if they long press in audience mode
+        setError("当前为观众端，设置菜单已隐藏。");
+        setTimeout(() => setError(null), 3000);
       }
       pressTimer.current = null;
       touchStartPos.current = null;
@@ -312,6 +323,10 @@ export default function App() {
 
   const handlePointerUp = async (e: React.PointerEvent) => {
     if (isSettingsOpen) return;
+    
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch (err) {}
 
     if (pressTimer.current) {
       clearTimeout(pressTimer.current);
@@ -323,6 +338,19 @@ export default function App() {
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance < 20) {
+          // Secret 5-tap to open settings in audience mode
+          tapCountRef.current += 1;
+          if (tapTimeoutRef.current) clearTimeout(tapTimeoutRef.current);
+          tapTimeoutRef.current = window.setTimeout(() => {
+            tapCountRef.current = 0;
+          }, 1000);
+
+          if (tapCountRef.current >= 5) {
+            setIsSettingsOpen(true);
+            tapCountRef.current = 0;
+            return;
+          }
+
           if (isAudience) {
             if (!audienceReady) {
               const hasCamera = await initCamera();
@@ -343,7 +371,11 @@ export default function App() {
     touchStartPos.current = null;
   };
 
-  const handlePointerCancel = () => {
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    try {
+      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch (err) {}
+    
     if (pressTimer.current) {
       clearTimeout(pressTimer.current);
       pressTimer.current = null;
