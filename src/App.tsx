@@ -343,6 +343,10 @@ export default function App() {
       alert('请输入房间号');
       return;
     }
+    if (!userId) {
+      alert('未连接到服务器 (身份验证失败)。\\n如果您部署在 Netlify，请务必前往 Firebase 控制台 -> Authentication -> Settings -> Authorized domains，将您的 Netlify 域名添加进去！');
+      return;
+    }
     try {
       setIsSaving(true);
       const newRoomId = roomIdInput.trim().toUpperCase();
@@ -359,9 +363,9 @@ export default function App() {
       localStorage.setItem('blacklight-room', newRoomId);
       
       alert('设置已成功保存到云端！\\n下次使用相同的房间号即可恢复设置。');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Save failed', err);
-      alert('保存失败，请重试');
+      alert('保存失败: ' + err.message + '\\n请检查网络或 Firebase 权限设置。');
     } finally {
       setIsSaving(false);
     }
@@ -370,6 +374,10 @@ export default function App() {
   const loadFromCloud = async () => {
     if (!roomIdInput.trim()) {
       alert('请输入房间号');
+      return;
+    }
+    if (!userId) {
+      alert('未连接到服务器 (身份验证失败)。\\n如果您部署在 Netlify，请务必前往 Firebase 控制台 -> Authentication -> Settings -> Authorized domains，将您的 Netlify 域名添加进去！');
       return;
     }
     try {
@@ -390,9 +398,9 @@ export default function App() {
       } else {
         alert('未找到该房间号的云端设置。');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Load failed', err);
-      alert('加载失败，请重试');
+      alert('加载失败: ' + err.message + '\\n请检查网络或 Firebase 权限设置。');
     } finally {
       setIsLoading(false);
     }
