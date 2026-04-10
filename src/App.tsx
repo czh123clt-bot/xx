@@ -49,7 +49,7 @@ export default function App() {
   const pressTimer = useRef<number | null>(null);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
   const syncTimeoutRef = useRef<number | null>(null);
-  const lastTriggerTimeRef = useRef<number>(0);
+  const lastEventIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -117,30 +117,29 @@ export default function App() {
     const unsubscribe = onSnapshot(doc(db, 'rooms', roomId), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        if (data.audienceState && data.audienceState !== 'ignore' && data.triggerTime) {
+        if (data.audienceState && data.audienceState !== 'ignore' && data.eventId) {
           // Prevent re-triggering the same event
-          if (data.triggerTime === lastTriggerTimeRef.current) return;
-          lastTriggerTimeRef.current = data.triggerTime;
-
-          const now = Date.now();
-          const timeUntilTrigger = data.triggerTime - now;
+          if (data.eventId === lastEventIdRef.current) return;
+          lastEventIdRef.current = data.eventId;
 
           if (syncTimeoutRef.current) {
             clearTimeout(syncTimeoutRef.current);
           }
 
-          if (timeUntilTrigger > 0) {
+          const delay = data.delayMs || 0;
+          if (delay > 0) {
             syncTimeoutRef.current = window.setTimeout(() => {
               applyMode(data.audienceState as LightMode, true);
-            }, timeUntilTrigger);
-          } else if (timeUntilTrigger > -5000) {
-            // If we missed it but it's within 5 seconds, apply immediately
+            }, delay);
+          } else {
             applyMode(data.audienceState as LightMode, true);
           }
         }
       }
     }, (err) => {
       console.error("Firestore listen error:", err);
+      setError("监听同步失败，请检查网络或权限: " + err.message);
+      setTimeout(() => setError(null), 5000);
     });
 
     return () => unsubscribe();
@@ -260,19 +259,26 @@ export default function App() {
   };
 
   const syncToAudience = async (step: SequenceStep) => {
-    if (isAudience || !roomId || !userId) return;
+    if (isAudience || !roomId) return;
+    if (!userId) {
+      setError("未连接到服务器 (Firebase Auth 失败)，请检查域名白名单！");
+      setTimeout(() => setError(null), 5000);
+      return;
+    }
     
     try {
-      const triggerTime = Date.now() + audienceDelayMs;
       await setDoc(doc(db, 'rooms', roomId), {
         masterState: step.mode,
         audienceState: step.audienceMode,
-        triggerTime,
         delayMs: audienceDelayMs,
-        createdAt: Date.now()
+        eventId: Date.now().toString() + '-' + Math.random(),
+        createdAt: serverTimestamp()
       });
-    } catch (err) {
+      setError(null);
+    } catch (err: any) {
       console.error("Failed to sync to audience:", err);
+      setError("同步失败: " + err.message);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -419,6 +425,12 @@ export default function App() {
         className="absolute opacity-0 pointer-events-none w-[1px] h-[1px]"
       />
       
+      {error && (
+        <div className="fixed top-4 left-4 right-4 bg-red-900/90 text-white p-4 rounded-lg z-[100] text-sm pointer-events-none shadow-lg">
+          {error}
+        </div>
+      )}
+
       {isAudience && !audienceReady && (
         <div className="text-zinc-800 text-sm pointer-events-none">
           Tap anywhere to start
