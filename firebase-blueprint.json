@@ -1,0 +1,40 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Room",
+      "description": "A synchronization room for the flashlight state",
+      "type": "object",
+      "properties": {
+        "masterState": {
+          "type": "string",
+          "enum": ["on", "off", "sos", "strobe"],
+          "description": "The current state of the master device"
+        },
+        "audienceState": {
+          "type": "string",
+          "enum": ["on", "off", "sos", "strobe"],
+          "description": "The state the audience should transition to"
+        },
+        "triggerTime": {
+          "type": "number",
+          "description": "The timestamp (ms) when the audience should apply the state"
+        },
+        "delayMs": {
+          "type": "number",
+          "description": "The delay in milliseconds for audience sync"
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["masterState", "audienceState", "triggerTime", "delayMs", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Rooms for synchronizing flashlights"
+    }
+  }
+}
