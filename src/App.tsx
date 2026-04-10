@@ -5,9 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, X, Copy, Link as LinkIcon, Save, DownloadCloud } from 'lucide-react';
-import { db, auth, signIn } from './firebase';
-import { doc, setDoc, getDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import mqtt from 'mqtt';
 
 type LightMode = 'on' | 'off' | 'sos' | 'strobe' | 'redirect' | 'ignore';
 
@@ -40,7 +38,9 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isAudience, setIsAudience] = useState(false);
   const [audienceReady, setAudienceReady] = useState(false);
-  const [userId, setUserId] = useState<string | null>(null);
+  
+  const [mqttClient, setMqttClient] = useState<mqtt.MqttClient | null>(null);
+  const [mqttConnected, setMqttConnected] = useState(false);
 
   const trackRef = useRef<MediaStreamTrack | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -66,37 +66,39 @@ export default function App() {
       setRoomId(savedRoom);
       setRoomIdInput(savedRoom);
 
-      // Try to load cloud config for this room
-      getDoc(doc(db, 'configs', savedRoom)).then(snapshot => {
-        if (snapshot.exists()) {
-          const data = snapshot.data();
-          if (data.sequence) setSequence(data.sequence);
-          if (data.redirectUrl) setRedirectUrl(data.redirectUrl);
-          if (data.audienceDelayMs !== undefined) setAudienceDelayMs(data.audienceDelayMs);
-        } else {
-          // Fallback to local storage config if cloud doesn't exist
-          const saved = localStorage.getItem('blacklight-config');
-          if (saved) {
-            try {
-              const config = JSON.parse(saved);
-              if (config.sequence) setSequence(config.sequence);
-              if (config.redirectUrl) setRedirectUrl(config.redirectUrl);
-              if (config.audienceDelayMs !== undefined) setAudienceDelayMs(config.audienceDelayMs);
-            } catch (e) {}
-          }
-        }
-      }).catch(err => console.error("Failed to load initial config:", err));
+      const saved = localStorage.getItem('blacklight-config');
+      if (saved) {
+        try {
+          const config = JSON.parse(saved);
+          if (config.sequence) setSequence(config.sequence);
+          if (config.redirectUrl) setRedirectUrl(config.redirectUrl);
+          if (config.audienceDelayMs !== undefined) setAudienceDelayMs(config.audienceDelayMs);
+        } catch (e) {}
+      }
     }
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUserId(user.uid);
-      } else {
-        signIn();
-      }
+    // Connect to EMQX Public Broker (Accessible in China without VPN)
+    const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
+      clientId: 'blacklight_' + Math.random().toString(16).substring(2, 10),
+      keepalive: 60,
+      clean: true,
     });
 
-    return () => unsubscribeAuth();
+    client.on('connect', () => {
+      console.log('MQTT Connected');
+      setMqttConnected(true);
+      setMqttClient(client);
+      setError(null);
+    });
+
+    client.on('error', (err) => {
+      console.error('MQTT Error:', err);
+      setError('连接同步服务器失败，请检查网络');
+    });
+
+    return () => {
+      client.end();
+    };
   }, []);
 
   useEffect(() => {
@@ -112,38 +114,46 @@ export default function App() {
 
   // Audience Sync Listener
   useEffect(() => {
-    if (!isAudience || !roomId || !userId || !audienceReady) return;
+    if (!isAudience || !roomId || !mqttClient || !audienceReady) return;
 
-    const unsubscribe = onSnapshot(doc(db, 'rooms', roomId), (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data.audienceState && data.audienceState !== 'ignore' && data.eventId) {
-          // Prevent re-triggering the same event
-          if (data.eventId === lastEventIdRef.current) return;
-          lastEventIdRef.current = data.eventId;
+    const triggerTopic = `blacklight/room/${roomId}/trigger`;
+    mqttClient.subscribe(triggerTopic);
 
-          if (syncTimeoutRef.current) {
-            clearTimeout(syncTimeoutRef.current);
-          }
+    const handleMessage = (topic: string, message: Buffer) => {
+      if (topic === triggerTopic) {
+        try {
+          const data = JSON.parse(message.toString());
+          if (data.audienceState && data.audienceState !== 'ignore' && data.eventId) {
+            // Prevent re-triggering the same event
+            if (data.eventId === lastEventIdRef.current) return;
+            lastEventIdRef.current = data.eventId;
 
-          const delay = data.delayMs || 0;
-          if (delay > 0) {
-            syncTimeoutRef.current = window.setTimeout(() => {
+            if (syncTimeoutRef.current) {
+              clearTimeout(syncTimeoutRef.current);
+            }
+
+            const delay = data.delayMs || 0;
+            if (delay > 0) {
+              syncTimeoutRef.current = window.setTimeout(() => {
+                applyMode(data.audienceState as LightMode, true);
+              }, delay);
+            } else {
               applyMode(data.audienceState as LightMode, true);
-            }, delay);
-          } else {
-            applyMode(data.audienceState as LightMode, true);
+            }
           }
+        } catch (e) {
+          console.error("Failed to parse trigger message", e);
         }
       }
-    }, (err) => {
-      console.error("Firestore listen error:", err);
-      setError("监听同步失败，请检查网络或权限: " + err.message);
-      setTimeout(() => setError(null), 5000);
-    });
+    };
 
-    return () => unsubscribe();
-  }, [isAudience, roomId, userId, audienceReady]);
+    mqttClient.on('message', handleMessage);
+
+    return () => {
+      mqttClient.unsubscribe(triggerTopic);
+      mqttClient.off('message', handleMessage);
+    };
+  }, [isAudience, roomId, mqttClient, audienceReady]);
 
   const initCamera = async () => {
     if (trackRef.current) return true;
@@ -260,20 +270,22 @@ export default function App() {
 
   const syncToAudience = async (step: SequenceStep) => {
     if (isAudience || !roomId) return;
-    if (!userId) {
-      setError("未连接到服务器 (Firebase Auth 失败)，请检查域名白名单！");
+    if (!mqttConnected || !mqttClient) {
+      setError("未连接到同步服务器，请稍后再试！");
       setTimeout(() => setError(null), 5000);
       return;
     }
     
     try {
-      await setDoc(doc(db, 'rooms', roomId), {
-        masterState: step.mode,
+      const triggerTopic = `blacklight/room/${roomId}/trigger`;
+      const payload = JSON.stringify({
         audienceState: step.audienceMode,
         delayMs: audienceDelayMs,
         eventId: Date.now().toString() + '-' + Math.random(),
-        createdAt: serverTimestamp()
+        timestamp: Date.now()
       });
+
+      mqttClient.publish(triggerTopic, payload, { qos: 1, retain: false });
       setError(null);
     } catch (err: any) {
       console.error("Failed to sync to audience:", err);
@@ -343,31 +355,37 @@ export default function App() {
       alert('请输入房间号');
       return;
     }
-    if (!userId) {
-      alert('未连接到服务器 (身份验证失败)。\\n如果您部署在 Netlify，请务必前往 Firebase 控制台 -> Authentication -> Settings -> Authorized domains，将您的 Netlify 域名添加进去！');
+    if (!mqttConnected || !mqttClient) {
+      alert('未连接到同步服务器，请检查网络。');
       return;
     }
     try {
       setIsSaving(true);
       const newRoomId = roomIdInput.trim().toUpperCase();
+      const configTopic = `blacklight/room/${newRoomId}/config`;
       
-      await setDoc(doc(db, 'configs', newRoomId), {
+      const payload = JSON.stringify({
         sequence,
         redirectUrl,
         audienceDelayMs,
-        updatedAt: serverTimestamp()
+        updatedAt: Date.now()
       });
       
-      setRoomId(newRoomId);
-      setRoomIdInput(newRoomId);
-      localStorage.setItem('blacklight-room', newRoomId);
-      
-      alert('设置已成功保存到云端！\\n下次使用相同的房间号即可恢复设置。');
+      mqttClient.publish(configTopic, payload, { qos: 1, retain: true }, (err) => {
+        setIsSaving(false);
+        if (err) {
+          alert('保存失败: ' + err.message);
+        } else {
+          setRoomId(newRoomId);
+          setRoomIdInput(newRoomId);
+          localStorage.setItem('blacklight-room', newRoomId);
+          alert('设置已成功保存到云端！\\n下次使用相同的房间号即可恢复设置。');
+        }
+      });
     } catch (err: any) {
-      console.error('Save failed', err);
-      alert('保存失败: ' + err.message + '\\n请检查网络或 Firebase 权限设置。');
-    } finally {
       setIsSaving(false);
+      console.error('Save failed', err);
+      alert('保存失败: ' + err.message);
     }
   };
 
@@ -376,33 +394,52 @@ export default function App() {
       alert('请输入房间号');
       return;
     }
-    if (!userId) {
-      alert('未连接到服务器 (身份验证失败)。\\n如果您部署在 Netlify，请务必前往 Firebase 控制台 -> Authentication -> Settings -> Authorized domains，将您的 Netlify 域名添加进去！');
+    if (!mqttConnected || !mqttClient) {
+      alert('未连接到同步服务器，请检查网络。');
       return;
     }
     try {
       setIsLoading(true);
       const targetRoomId = roomIdInput.trim().toUpperCase();
-      const snapshot = await getDoc(doc(db, 'configs', targetRoomId));
+      const configTopic = `blacklight/room/${targetRoomId}/config`;
       
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data.sequence) setSequence(data.sequence);
-        if (data.redirectUrl) setRedirectUrl(data.redirectUrl);
-        if (data.audienceDelayMs !== undefined) setAudienceDelayMs(data.audienceDelayMs);
-        
-        setRoomId(targetRoomId);
-        setRoomIdInput(targetRoomId);
-        localStorage.setItem('blacklight-room', targetRoomId);
-        alert('已成功加载云端设置！');
-      } else {
-        alert('未找到该房间号的云端设置。');
-      }
+      const handleConfigMessage = (topic: string, message: Buffer) => {
+        if (topic === configTopic) {
+          try {
+            const data = JSON.parse(message.toString());
+            if (data.sequence) setSequence(data.sequence);
+            if (data.redirectUrl) setRedirectUrl(data.redirectUrl);
+            if (data.audienceDelayMs !== undefined) setAudienceDelayMs(data.audienceDelayMs);
+            
+            setRoomId(targetRoomId);
+            setRoomIdInput(targetRoomId);
+            localStorage.setItem('blacklight-room', targetRoomId);
+            alert('已成功加载云端设置！');
+          } catch (e) {
+            alert('加载失败：云端数据格式错误');
+          } finally {
+            setIsLoading(false);
+            mqttClient.unsubscribe(configTopic);
+            mqttClient.off('message', handleConfigMessage);
+            clearTimeout(timeoutId);
+          }
+        }
+      };
+
+      mqttClient.subscribe(configTopic);
+      mqttClient.on('message', handleConfigMessage);
+
+      const timeoutId = setTimeout(() => {
+        setIsLoading(false);
+        mqttClient.unsubscribe(configTopic);
+        mqttClient.off('message', handleConfigMessage);
+        alert('未找到该房间号的云端设置，或加载超时。');
+      }, 3000);
+
     } catch (err: any) {
-      console.error('Load failed', err);
-      alert('加载失败: ' + err.message + '\\n请检查网络或 Firebase 权限设置。');
-    } finally {
       setIsLoading(false);
+      console.error('Load failed', err);
+      alert('加载失败: ' + err.message);
     }
   };
 
