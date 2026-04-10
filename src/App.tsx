@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, X, Copy, Link as LinkIcon } from 'lucide-react';
 import { db, auth, signIn } from './firebase';
 import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
