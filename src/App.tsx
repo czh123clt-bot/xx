@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, X, Copy, Link as LinkIcon, Save, DownloadCloud } from 'lucide-react';
-import mqtt from 'mqtt';
+import mqtt from 'mqtt/dist/mqtt.min';
 
 type LightMode = 'on' | 'off' | 'sos' | 'strobe' | 'redirect' | 'ignore';
 
@@ -180,7 +180,8 @@ export default function App() {
         }
         return true;
       } catch (fallbackErr: any) {
-        setError(fallbackErr.message || '无法访问摄像头 (Camera access denied)');
+        setError('无法访问摄像头: ' + (fallbackErr.message || 'Camera access denied'));
+        setTimeout(() => setError(null), 5000);
         return false;
       }
     }
@@ -194,8 +195,10 @@ export default function App() {
       await trackRef.current.applyConstraints({
         advanced: [{ torch: on }],
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Torch error:', err);
+      setError('闪光灯控制失败 (Torch Error): ' + err.message);
+      setTimeout(() => setError(null), 5000);
     } finally {
       isApplyingRef.current = false;
     }
