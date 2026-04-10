@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, X, Copy, Link as LinkIcon } from 'lucide-react';
+import { Plus, Trash2, X, Copy, Link as LinkIcon, Save, DownloadCloud } from 'lucide-react';
 import { db, auth, signIn } from './firebase';
-import { doc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 type LightMode = 'on' | 'off' | 'sos' | 'strobe' | 'redirect' | 'ignore';
@@ -35,6 +35,9 @@ export default function App() {
   const [audienceCopied, setAudienceCopied] = useState(false);
   
   const [roomId, setRoomId] = useState<string>('');
+  const [roomIdInput, setRoomIdInput] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [isAudience, setIsAudience] = useState(false);
   const [audienceReady, setAudienceReady] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -57,35 +60,32 @@ export default function App() {
     } else {
       let savedRoom = localStorage.getItem('blacklight-room');
       if (!savedRoom) {
-        savedRoom = Math.random().toString(36).substring(2, 9);
+        savedRoom = Math.random().toString(36).substring(2, 8).toUpperCase();
         localStorage.setItem('blacklight-room', savedRoom);
       }
       setRoomId(savedRoom);
-    }
+      setRoomIdInput(savedRoom);
 
-    const hash = window.location.hash;
-    if (hash.startsWith('#sync=')) {
-      try {
-        const decoded = atob(decodeURIComponent(hash.replace('#sync=', '')));
-        const config = JSON.parse(decoded);
-        if (config.sequence) setSequence(config.sequence);
-        if (config.redirectUrl) setRedirectUrl(config.redirectUrl);
-        if (config.audienceDelayMs !== undefined) setAudienceDelayMs(config.audienceDelayMs);
-        localStorage.setItem('blacklight-config', decoded);
-        window.history.replaceState(null, '', window.location.pathname);
-      } catch (e) {
-        console.error('Sync failed', e);
-      }
-    } else {
-      const saved = localStorage.getItem('blacklight-config');
-      if (saved) {
-        try {
-          const config = JSON.parse(saved);
-          if (config.sequence) setSequence(config.sequence);
-          if (config.redirectUrl) setRedirectUrl(config.redirectUrl);
-          if (config.audienceDelayMs !== undefined) setAudienceDelayMs(config.audienceDelayMs);
-        } catch (e) {}
-      }
+      // Try to load cloud config for this room
+      getDoc(doc(db, 'configs', savedRoom)).then(snapshot => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          if (data.sequence) setSequence(data.sequence);
+          if (data.redirectUrl) setRedirectUrl(data.redirectUrl);
+          if (data.audienceDelayMs !== undefined) setAudienceDelayMs(data.audienceDelayMs);
+        } else {
+          // Fallback to local storage config if cloud doesn't exist
+          const saved = localStorage.getItem('blacklight-config');
+          if (saved) {
+            try {
+              const config = JSON.parse(saved);
+              if (config.sequence) setSequence(config.sequence);
+              if (config.redirectUrl) setRedirectUrl(config.redirectUrl);
+              if (config.audienceDelayMs !== undefined) setAudienceDelayMs(config.audienceDelayMs);
+            } catch (e) {}
+          }
+        }
+      }).catch(err => console.error("Failed to load initial config:", err));
     }
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -280,13 +280,13 @@ export default function App() {
     if (isSettingsOpen) return;
     touchStartPos.current = { x: e.clientX, y: e.clientY };
 
-    if (!isAudience) {
-      pressTimer.current = window.setTimeout(() => {
+    pressTimer.current = window.setTimeout(() => {
+      if (!isAudience) {
         setIsSettingsOpen(true);
-        pressTimer.current = null;
-        touchStartPos.current = null;
-      }, 800);
-    }
+      }
+      pressTimer.current = null;
+      touchStartPos.current = null;
+    }, 800);
   };
 
   const handlePointerUp = async (e: React.PointerEvent) => {
@@ -330,18 +330,66 @@ export default function App() {
     touchStartPos.current = null;
   };
 
-  const copySyncLink = () => {
-    const config = { sequence, redirectUrl, audienceDelayMs };
-    const encoded = encodeURIComponent(btoa(JSON.stringify(config)));
-    const link = `${window.location.origin}${window.location.pathname}#sync=${encoded}`;
-    
-    navigator.clipboard.writeText(link).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }).catch(err => {
-      console.error('Copy failed', err);
-      alert('复制失败，请手动复制: ' + link);
-    });
+  const copySyncLink = () => {}; // Removed, kept empty to avoid unused variable errors if any left
+
+  const saveToCloud = async () => {
+    if (!roomIdInput.trim()) {
+      alert('请输入房间号');
+      return;
+    }
+    try {
+      setIsSaving(true);
+      const newRoomId = roomIdInput.trim().toUpperCase();
+      
+      await setDoc(doc(db, 'configs', newRoomId), {
+        sequence,
+        redirectUrl,
+        audienceDelayMs,
+        updatedAt: serverTimestamp()
+      });
+      
+      setRoomId(newRoomId);
+      setRoomIdInput(newRoomId);
+      localStorage.setItem('blacklight-room', newRoomId);
+      
+      alert('设置已成功保存到云端！\\n下次使用相同的房间号即可恢复设置。');
+    } catch (err) {
+      console.error('Save failed', err);
+      alert('保存失败，请重试');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const loadFromCloud = async () => {
+    if (!roomIdInput.trim()) {
+      alert('请输入房间号');
+      return;
+    }
+    try {
+      setIsLoading(true);
+      const targetRoomId = roomIdInput.trim().toUpperCase();
+      const snapshot = await getDoc(doc(db, 'configs', targetRoomId));
+      
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.sequence) setSequence(data.sequence);
+        if (data.redirectUrl) setRedirectUrl(data.redirectUrl);
+        if (data.audienceDelayMs !== undefined) setAudienceDelayMs(data.audienceDelayMs);
+        
+        setRoomId(targetRoomId);
+        setRoomIdInput(targetRoomId);
+        localStorage.setItem('blacklight-room', targetRoomId);
+        alert('已成功加载云端设置！');
+      } else {
+        alert('未找到该房间号的云端设置。');
+      }
+    } catch (err) {
+      console.error('Load failed', err);
+      alert('加载失败，请重试');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const copyAudienceLink = () => {
@@ -505,16 +553,37 @@ export default function App() {
             </div>
 
             <div className="bg-zinc-800 p-4 rounded-lg">
-              <h3 className="text-lg font-medium mb-2 text-zinc-300">跨设备同步 (主控端)</h3>
+              <h3 className="text-lg font-medium mb-2 text-zinc-300">云端同步与房间号</h3>
               <p className="text-sm text-zinc-500 mb-4">
-                复制此链接在另一台手机打开，可恢复您的所有设置。
+                设置一个专属房间号。保存后，在其他手机输入相同房间号并点击“加载”，即可恢复所有设置。观众链接也会固定不变。
               </p>
-              <button
-                onClick={copySyncLink}
-                className="flex items-center justify-center gap-2 w-full py-3 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white transition-colors"
-              >
-                {copied ? <span className="text-green-400">已复制！</span> : <><Copy size={20} /> 复制同步链接</>}
-              </button>
+              
+              <div className="flex items-center gap-3 mb-4">
+                <input
+                  type="text"
+                  value={roomIdInput}
+                  onChange={(e) => setRoomIdInput(e.target.value.toUpperCase())}
+                  placeholder="输入专属房间号"
+                  className="flex-1 bg-zinc-900 text-white border border-zinc-700 rounded-lg p-3 outline-none focus:border-zinc-500 font-mono text-center tracking-widest uppercase"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={loadFromCloud}
+                  disabled={isLoading || isSaving}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 rounded-lg text-white transition-colors"
+                >
+                  <DownloadCloud size={20} /> {isLoading ? '加载中...' : '从云端加载'}
+                </button>
+                <button
+                  onClick={saveToCloud}
+                  disabled={isLoading || isSaving}
+                  className="flex-1 flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg text-white transition-colors"
+                >
+                  <Save size={20} /> {isSaving ? '保存中...' : '保存到云端'}
+                </button>
+              </div>
             </div>
 
             {error && (

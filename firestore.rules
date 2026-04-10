@@ -2,47 +2,16 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: rooms
-    // Document ID: random string
-    // Fields:
-    //   - masterState: string (required, enum: 'on', 'off', 'sos', 'strobe')
-    //   - audienceState: string (required, enum: 'on', 'off', 'sos', 'strobe')
-    //   - triggerTime: number (required, timestamp in ms)
-    //   - delayMs: number (required, delay in ms)
-    //   - createdAt: number (required, timestamp in ms)
-    //
-    // ===============================================================
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    function hasOnlyAllowedFields(fields) {
-      return request.resource.data.keys().hasOnly(fields);
-    }
-
-    function isValidRoom(data) {
-      return hasOnlyAllowedFields(['masterState', 'audienceState', 'triggerTime', 'delayMs', 'createdAt']) &&
-             data.masterState in ['on', 'off', 'sos', 'strobe'] &&
-             data.audienceState in ['on', 'off', 'sos', 'strobe'] &&
-             data.triggerTime is number &&
-             data.delayMs is number && data.delayMs >= 0 && data.delayMs <= 10000 &&
-             data.createdAt is number;
-    }
-
     match /rooms/{roomId} {
-      // Allow any authenticated user (including anonymous) to create/read/update rooms
-      // This is necessary for the seamless "magic trick" experience.
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidRoom(request.resource.data);
-      allow update: if isAuthenticated() && isValidRoom(request.resource.data);
+      allow read, write: if isAuthenticated();
+    }
+
+    match /configs/{roomId} {
+      allow read, write: if isAuthenticated();
     }
   }
 }
