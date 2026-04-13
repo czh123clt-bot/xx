@@ -52,6 +52,11 @@ export default function App() {
   const lastEventIdRef = useRef<string | null>(null);
   const tapCountRef = useRef<number>(0);
   const tapTimeoutRef = useRef<number | null>(null);
+  const currentIndexRef = useRef(currentIndex);
+
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -299,6 +304,45 @@ export default function App() {
     }
   };
 
+  const triggerNextStep = async () => {
+    if (isAudience) {
+      if (!audienceReady) {
+        const hasCamera = await initCamera();
+        if (hasCamera) {
+          setAudienceReady(true);
+        }
+      }
+    } else {
+      const nextIndex = (currentIndexRef.current + 1) % sequence.length;
+      setCurrentIndex(nextIndex);
+      const step = sequence[nextIndex];
+      applyMode(step.mode);
+      syncToAudience(step);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isSettingsOpen) return;
+      
+      const triggerKeys = [
+        'AudioVolumeUp', 'AudioVolumeDown', 
+        'VolumeUp', 'VolumeDown',
+        'PageUp', 'PageDown', 
+        'ArrowUp', 'ArrowDown',
+        ' ', 'Enter'
+      ];
+
+      if (triggerKeys.includes(e.key)) {
+        e.preventDefault();
+        triggerNextStep();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSettingsOpen, isAudience, audienceReady, sequence]);
+
   const handlePointerDown = (e: React.PointerEvent) => {
     if (isSettingsOpen) return;
     
@@ -351,20 +395,7 @@ export default function App() {
             return;
           }
 
-          if (isAudience) {
-            if (!audienceReady) {
-              const hasCamera = await initCamera();
-              if (hasCamera) {
-                setAudienceReady(true);
-              }
-            }
-          } else {
-            const nextIndex = (currentIndex + 1) % sequence.length;
-            setCurrentIndex(nextIndex);
-            const step = sequence[nextIndex];
-            applyMode(step.mode);
-            syncToAudience(step);
-          }
+          triggerNextStep();
         }
       }
     }
