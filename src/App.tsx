@@ -32,6 +32,12 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [audienceCopied, setAudienceCopied] = useState(false);
   
+  const [audienceScreenMode, setAudienceScreenMode] = useState<'black' | 'iframe' | 'article'>('black');
+  const [camouflageUrl, setCamouflageUrl] = useState('https://example.com');
+  const [articleTitle, setArticleTitle] = useState('震惊！这个魔术太神奇了');
+  const [articleAuthor, setArticleAuthor] = useState('魔术情报局');
+  const [articleContent, setArticleContent] = useState('这是一篇伪装的文章内容...\n\n你可以随便写点什么，观众在阅读这篇文章的时候，你就可以在后台偷偷控制他们的闪光灯了！\n\n(你可以上下滑动阅读)');
+  
   const [roomId, setRoomId] = useState<string>('');
   const [roomIdInput, setRoomIdInput] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
@@ -80,6 +86,11 @@ export default function App() {
           if (config.sequence) setSequence(config.sequence);
           if (config.redirectUrl) setRedirectUrl(config.redirectUrl);
           if (config.audienceDelayMs !== undefined) setAudienceDelayMs(config.audienceDelayMs);
+          if (config.audienceScreenMode) setAudienceScreenMode(config.audienceScreenMode);
+          if (config.camouflageUrl) setCamouflageUrl(config.camouflageUrl);
+          if (config.articleTitle) setArticleTitle(config.articleTitle);
+          if (config.articleAuthor) setArticleAuthor(config.articleAuthor);
+          if (config.articleContent) setArticleContent(config.articleContent);
         } catch (e) {}
       }
     }
@@ -109,9 +120,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const config = { sequence, redirectUrl, audienceDelayMs };
+    const config = { sequence, redirectUrl, audienceDelayMs, audienceScreenMode, camouflageUrl, articleTitle, articleAuthor, articleContent };
     localStorage.setItem('blacklight-config', JSON.stringify(config));
-  }, [sequence, redirectUrl, audienceDelayMs]);
+    
+    // Auto-sync config to cloud so audience devices update immediately
+    if (!isAudience && roomId && mqttClient && mqttConnected) {
+      const configTopic = `blacklight/room/${roomId}/config`;
+      const payload = JSON.stringify({
+        ...config,
+        updatedAt: Date.now()
+      });
+      // retain: true ensures late-joining audience members get the latest config immediately
+      mqttClient.publish(configTopic, payload, { qos: 1, retain: true });
+    }
+  }, [sequence, redirectUrl, audienceDelayMs, audienceScreenMode, camouflageUrl, articleTitle, articleAuthor, articleContent, isAudience, roomId, mqttClient, mqttConnected]);
 
   useEffect(() => {
     const preventDefault = (e: Event) => e.preventDefault();
@@ -119,7 +141,37 @@ export default function App() {
     return () => document.removeEventListener('contextmenu', preventDefault);
   }, []);
 
-  // Audience Sync Listener
+  // Audience Config Listener (Fetch settings like camouflage mode)
+  useEffect(() => {
+    if (!isAudience || !roomId || !mqttClient) return;
+
+    const configTopic = `blacklight/room/${roomId}/config`;
+    mqttClient.subscribe(configTopic);
+
+    const handleConfigMessage = (topic: string, message: Buffer) => {
+      if (topic === configTopic) {
+        try {
+          const data = JSON.parse(message.toString());
+          if (data.audienceScreenMode) setAudienceScreenMode(data.audienceScreenMode);
+          if (data.camouflageUrl) setCamouflageUrl(data.camouflageUrl);
+          if (data.articleTitle) setArticleTitle(data.articleTitle);
+          if (data.articleAuthor) setArticleAuthor(data.articleAuthor);
+          if (data.articleContent) setArticleContent(data.articleContent);
+        } catch (e) {
+          console.error("Failed to parse config", e);
+        }
+      }
+    };
+
+    mqttClient.on('message', handleConfigMessage);
+
+    return () => {
+      mqttClient.unsubscribe(configTopic);
+      mqttClient.off('message', handleConfigMessage);
+    };
+  }, [isAudience, roomId, mqttClient]);
+
+  // Audience Sync Listener (Triggers)
   useEffect(() => {
     if (!isAudience || !roomId || !mqttClient || !audienceReady) return;
 
@@ -434,6 +486,11 @@ export default function App() {
         sequence,
         redirectUrl,
         audienceDelayMs,
+        audienceScreenMode,
+        camouflageUrl,
+        articleTitle,
+        articleAuthor,
+        articleContent,
         updatedAt: Date.now()
       });
       
@@ -476,6 +533,11 @@ export default function App() {
             if (data.sequence) setSequence(data.sequence);
             if (data.redirectUrl) setRedirectUrl(data.redirectUrl);
             if (data.audienceDelayMs !== undefined) setAudienceDelayMs(data.audienceDelayMs);
+            if (data.audienceScreenMode) setAudienceScreenMode(data.audienceScreenMode);
+            if (data.camouflageUrl) setCamouflageUrl(data.camouflageUrl);
+            if (data.articleTitle) setArticleTitle(data.articleTitle);
+            if (data.articleAuthor) setArticleAuthor(data.articleAuthor);
+            if (data.articleContent) setArticleContent(data.articleContent);
             
             setRoomId(targetRoomId);
             setRoomIdInput(targetRoomId);
@@ -521,19 +583,13 @@ export default function App() {
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black touch-none select-none flex items-center justify-center"
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
-      onPointerLeave={handlePointerCancel}
-    >
+    <>
       <video
         ref={videoRef}
         playsInline
         muted
         autoPlay
-        className="absolute opacity-0 pointer-events-none w-[1px] h-[1px]"
+        className="fixed top-0 left-0 opacity-0 pointer-events-none w-[1px] h-[1px] z-[-1]"
       />
       
       {error && (
@@ -542,15 +598,63 @@ export default function App() {
         </div>
       )}
 
-      {isAudience && !audienceReady && (
-        <div className="text-zinc-800 text-sm pointer-events-none">
-          Tap anywhere to start
+      {isAudience ? (
+        <div className="fixed inset-0 bg-black">
+          {audienceScreenMode === 'iframe' && (
+            <iframe 
+              src={camouflageUrl} 
+              className="w-full h-full border-none bg-white" 
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            />
+          )}
+
+          {audienceScreenMode === 'article' && (
+            <div className="w-full h-full bg-white text-black overflow-y-auto p-5 pb-20">
+              <h1 className="text-2xl font-bold mb-3 leading-snug">{articleTitle}</h1>
+              <div className="text-blue-500 text-sm mb-6">{articleAuthor}</div>
+              <div className="text-gray-800 text-base leading-relaxed whitespace-pre-wrap">
+                {articleContent}
+              </div>
+            </div>
+          )}
+          
+          {/* First tap overlay to init camera */}
+          {!audienceReady && (
+            <div 
+              className={`absolute inset-0 z-50 flex items-center justify-center ${audienceScreenMode !== 'black' ? 'bg-white text-zinc-800' : 'bg-black text-zinc-600'}`}
+              onPointerDown={async () => {
+                const hasCamera = await initCamera();
+                if (hasCamera) setAudienceReady(true);
+              }}
+            >
+              {audienceScreenMode !== 'black' ? '点击屏幕继续访问...' : 'Tap anywhere to start'}
+            </div>
+          )}
+
+          {/* Backdoor for settings (Top Right Corner) */}
+          <div 
+            className="absolute top-0 right-0 w-24 h-24 z-[60]" 
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            onPointerLeave={handlePointerCancel}
+          />
+        </div>
+      ) : (
+        <div
+          className="fixed inset-0 bg-black touch-none select-none flex items-center justify-center"
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onPointerLeave={handlePointerCancel}
+        >
+          {/* Master view is just black */}
         </div>
       )}
 
-      {isSettingsOpen && !isAudience && (
+      {isSettingsOpen && (
         <div 
-          className="fixed inset-0 bg-zinc-900 text-white p-6 z-50 overflow-y-auto touch-auto"
+          className="fixed inset-0 bg-zinc-900 text-white p-6 z-[100] overflow-y-auto touch-auto"
           onPointerDown={(e) => e.stopPropagation()}
         >
           <div className="flex justify-between items-center mb-8 max-w-md mx-auto">
@@ -653,8 +757,78 @@ export default function App() {
             <div className="bg-zinc-800 p-4 rounded-lg border border-blue-500/30">
               <h3 className="text-lg font-medium mb-2 text-blue-400">观众链接 (Audience Link)</h3>
               <p className="text-sm text-zinc-400 mb-4">
-                复制此链接发送给观众。观众打开后屏幕全黑，当您点击屏幕时，观众的手机会根据上面的设置同步变化。
+                复制此链接发送给观众。当您点击屏幕时，观众的手机会根据上面的设置同步变化。
               </p>
+              
+              <div className="mb-4 space-y-3">
+                <label className="flex items-center gap-2 text-sm text-zinc-300">
+                  <input 
+                    type="radio" 
+                    checked={audienceScreenMode === 'black'} 
+                    onChange={() => setAudienceScreenMode('black')}
+                    className="w-4 h-4"
+                  />
+                  纯黑屏幕 (默认)
+                </label>
+                <label className="flex items-center gap-2 text-sm text-zinc-300">
+                  <input 
+                    type="radio" 
+                    checked={audienceScreenMode === 'iframe'} 
+                    onChange={() => setAudienceScreenMode('iframe')}
+                    className="w-4 h-4"
+                  />
+                  嵌入外部网页 (容易白屏)
+                </label>
+                <label className="flex items-center gap-2 text-sm text-zinc-300">
+                  <input 
+                    type="radio" 
+                    checked={audienceScreenMode === 'article'} 
+                    onChange={() => setAudienceScreenMode('article')}
+                    className="w-4 h-4"
+                  />
+                  自定义文章 (推荐，100%成功)
+                </label>
+                
+                {audienceScreenMode === 'iframe' && (
+                  <div className="pl-6">
+                    <input
+                      type="url"
+                      value={camouflageUrl}
+                      onChange={(e) => setCamouflageUrl(e.target.value)}
+                      placeholder="输入伪装网页的网址"
+                      className="w-full bg-zinc-900 text-white border border-zinc-700 rounded p-2 outline-none focus:border-zinc-500 text-sm"
+                    />
+                    <p className="text-xs text-zinc-500 mt-1">注意：百度、微信等大厂网站会拦截嵌入导致白屏。建议使用下方“自定义文章”模式。</p>
+                  </div>
+                )}
+
+                {audienceScreenMode === 'article' && (
+                  <div className="pl-6 space-y-3">
+                    <input
+                      type="text"
+                      value={articleTitle}
+                      onChange={(e) => setArticleTitle(e.target.value)}
+                      placeholder="文章标题"
+                      className="w-full bg-zinc-900 text-white border border-zinc-700 rounded p-2 outline-none focus:border-zinc-500 text-sm font-bold"
+                    />
+                    <input
+                      type="text"
+                      value={articleAuthor}
+                      onChange={(e) => setArticleAuthor(e.target.value)}
+                      placeholder="公众号名称 / 作者"
+                      className="w-full bg-zinc-900 text-white border border-zinc-700 rounded p-2 outline-none focus:border-zinc-500 text-sm text-blue-400"
+                    />
+                    <textarea
+                      value={articleContent}
+                      onChange={(e) => setArticleContent(e.target.value)}
+                      placeholder="文章正文内容..."
+                      rows={6}
+                      className="w-full bg-zinc-900 text-white border border-zinc-700 rounded p-2 outline-none focus:border-zinc-500 text-sm resize-none"
+                    />
+                  </div>
+                )}
+              </div>
+
               <button
                 onClick={copyAudienceLink}
                 className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-lg text-white transition-colors"
@@ -717,6 +891,6 @@ export default function App() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
