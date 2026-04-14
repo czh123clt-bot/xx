@@ -59,10 +59,20 @@ export default function App() {
   const tapCountRef = useRef<number>(0);
   const tapTimeoutRef = useRef<number | null>(null);
   const currentIndexRef = useRef(currentIndex);
+  const redirectUrlRef = useRef(redirectUrl);
+  const audienceDelayMsRef = useRef(audienceDelayMs);
 
   useEffect(() => {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
+
+  useEffect(() => {
+    redirectUrlRef.current = redirectUrl;
+  }, [redirectUrl]);
+
+  useEffect(() => {
+    audienceDelayMsRef.current = audienceDelayMs;
+  }, [audienceDelayMs]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -194,10 +204,10 @@ export default function App() {
             const delay = data.delayMs || 0;
             if (delay > 0) {
               syncTimeoutRef.current = window.setTimeout(() => {
-                applyMode(data.audienceState as LightMode, true);
+                applyMode(data.audienceState as LightMode, true, data.redirectUrl);
               }, delay);
             } else {
-              applyMode(data.audienceState as LightMode, true);
+              applyMode(data.audienceState as LightMode, true, data.redirectUrl);
             }
           }
         } catch (e) {
@@ -270,14 +280,14 @@ export default function App() {
     }
   };
 
-  const applyMode = async (mode: LightMode, isFromSync = false) => {
+  const applyMode = async (mode: LightMode, isFromSync = false, syncRedirectUrl?: string) => {
     if (mode === 'ignore') return;
     
     stopBlinking();
 
     if (mode === 'redirect') {
       await setTorch(false);
-      let finalUrl = redirectUrl.trim();
+      let finalUrl = (syncRedirectUrl || redirectUrlRef.current).trim();
       if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
         finalUrl = 'https://' + finalUrl;
       }
@@ -342,7 +352,8 @@ export default function App() {
       const triggerTopic = `blacklight/room/${roomId}/trigger`;
       const payload = JSON.stringify({
         audienceState: step.audienceMode,
-        delayMs: audienceDelayMs,
+        delayMs: audienceDelayMsRef.current,
+        redirectUrl: redirectUrlRef.current,
         eventId: Date.now().toString() + '-' + Math.random(),
         timestamp: Date.now()
       });
