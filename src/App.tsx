@@ -32,7 +32,7 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [audienceCopied, setAudienceCopied] = useState(false);
   
-  const [audienceScreenMode, setAudienceScreenMode] = useState<'black' | 'iframe' | 'article'>('black');
+  const [audienceScreenMode, setAudienceScreenMode] = useState<'black' | 'iframe' | 'article' | 'apple'>('black');
   const [camouflageUrl, setCamouflageUrl] = useState('https://example.com');
   const [articleTitle, setArticleTitle] = useState('震惊！这个魔术太神奇了');
   const [articleAuthor, setArticleAuthor] = useState('魔术情报局');
@@ -619,12 +619,181 @@ export default function App() {
             />
           )}
 
-          {audienceScreenMode === 'article' && (
-            <div className="w-full h-full bg-white text-black overflow-y-auto p-5 pb-20">
-              <h1 className="text-2xl font-bold mb-3 leading-snug">{articleTitle}</h1>
-              <div className="text-blue-500 text-sm mb-6">{articleAuthor}</div>
-              <div className="text-gray-800 text-base leading-relaxed whitespace-pre-wrap">
-                {articleContent}
+          {audienceScreenMode === 'apple' && (
+            <div className="w-full h-full bg-white text-[#1d1d1f] overflow-y-auto font-[-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif]">
+              {/* Apple Nav Bar */}
+              <div className="h-12 bg-white border-b border-gray-200 flex items-center justify-between px-4 sticky top-0 z-10">
+                <svg viewBox="0 0 14 44" width="14" height="44" className="fill-current text-black/80"><path d="M13.0729 17.6822C13.0485 14.7619 15.4727 13.3344 15.5866 13.2612C14.1634 11.1813 11.9692 10.864 11.2206 10.8396C9.3496 10.6444 7.5193 11.9378 6.5513 11.9378C5.5589 11.9378 4.0703 10.864 2.5166 10.8884C0.5155 10.9128 -1.2578 12.0598 -2.2827 13.8412C-4.3814 17.4773 -2.722 22.846 -0.6721 25.8232C0.3284 27.2874 1.5079 28.9468 3.0616 28.898C4.5421 28.8492 5.1115 27.9463 6.8604 27.9463C8.5848 27.9463 9.1054 28.898 10.6591 28.8736C12.2616 28.8492 13.2621 27.3606 14.2383 25.8964C15.3852 24.2126 15.857 22.5776 15.8814 22.48C15.8326 22.48 13.0973 21.4307 13.0729 17.6822ZM9.431 8.2528C10.2526 7.2523 10.8057 5.8613 10.6593 4.4697C9.4635 4.5185 7.9993 5.275 7.1452 6.2755C6.3887 7.154 5.7379 8.5694 5.9087 9.936C7.2346 10.0336 8.6094 9.2527 9.431 8.2528Z" transform="translate(3 -4)"/></svg>
+                <div className="flex gap-6 text-black/80">
+                  <svg viewBox="0 0 15 44" width="15" height="44" className="fill-current"><path d="M14.298 27.144c-.236-.235-.618-.235-.853 0l-3.415 3.414a6.66 6.66 0 0 0-4.048-1.353c-3.69 0-6.692 3.003-6.692 6.693 0 3.69 3.002 6.692 6.692 6.692 3.69 0 6.692-3.002 6.692-6.692a6.66 6.66 0 0 0-1.353-4.048l3.414-3.415c.235-.235.235-.617 0-.853l-.437-.438zM5.982 41.383c-3.025 0-5.486-2.46-5.486-5.485 0-3.025 2.46-5.486 5.486-5.486 3.025 0 5.485 2.461 5.485 5.486 0 3.025-2.46 5.485-5.485 5.485z" transform="translate(0 -13)"/></svg>
+                  <svg viewBox="0 0 14 44" width="14" height="44" className="fill-current"><path d="M11.5 28.5c0-.276-.224-.5-.5-.5h-8c-.276 0-.5.224-.5.5v1c0 .276.224.5.5.5h8c.276 0 .5-.224.5-.5v-1zm0-5c0-.276-.224-.5-.5-.5h-8c-.276 0-.5.224-.5.5v1c0 .276.224.5.5.5h8c.276 0 .5-.224.5-.5v-1z" transform="translate(1 -6)"/></svg>
+                </div>
+              </div>
+
+              {/* Breadcrumb */}
+              <div className="px-5 py-4 text-xs text-gray-500 flex items-center gap-2">
+                <span className="text-[#06c]">Apple</span>
+                <span>&gt;</span>
+                <span className="text-[#06c]">支持</span>
+                <span>&gt;</span>
+                <span>在 iPhone 或 iPad Pro 上打开或关闭手电筒</span>
+              </div>
+
+              {/* Content */}
+              <div className="px-5 pb-12">
+                <h1 className="text-[40px] font-semibold leading-[1.1] tracking-tight mb-6">
+                  在 iPhone 或 iPad Pro 上打开或关闭手电筒
+                </h1>
+                
+                <p className="text-[17px] leading-[1.47] mb-6">
+                  你的 iPhone 或 iPad Pro 上的 LED 闪光灯还可用作手电筒，方便你在需要时作为辅助照明。
+                </p>
+
+                <p className="text-[17px] leading-[1.47] mb-4">
+                  有多种方式可以打开或关闭手电筒：
+                </p>
+
+                <ul className="list-disc pl-5 space-y-3 text-[17px] leading-[1.47] mb-10">
+                  <li>你可以<span className="text-[#06c]">指示 Siri 完成操作</span> <span className="inline-block w-4 h-4 border border-[#06c] rounded-full text-[#06c] text-center leading-3 text-xs">v</span>。</li>
+                  <li>你可以<span className="text-[#06c]">使用“控制中心”</span> <span className="inline-block w-4 h-4 border border-[#06c] rounded-full text-[#06c] text-center leading-3 text-xs">v</span>。</li>
+                  <li>在 iPhone 15 Pro 或 iPhone 15 Pro Max 上，你可以<span className="text-[#06c]">使用操作按钮</span> <span className="inline-block w-4 h-4 border border-[#06c] rounded-full text-[#06c] text-center leading-3 text-xs">v</span>。</li>
+                </ul>
+
+                <h2 className="text-[28px] font-semibold leading-[1.14] tracking-tight mb-4">
+                  指示 Siri 完成操作
+                </h2>
+
+                <p className="text-[17px] leading-[1.47] mb-4">
+                  下面提供了一些关于如何使用 Siri 来打开手电筒的示例：
+                </p>
+
+                <ul className="list-disc pl-5 space-y-3 text-[17px] leading-[1.47] mb-10">
+                  <li>“嘿 Siri，打开手电筒。”</li>
+                  <li>“嘿 Siri，可以打开手电筒吗？”</li>
+                  <li>“嘿 Siri，关闭手电筒。”</li>
+                </ul>
+
+                <h2 className="text-[28px] font-semibold leading-[1.14] tracking-tight mb-4">
+                  使用“控制中心”打开或关闭手电筒
+                </h2>
+
+                <ol className="list-decimal pl-5 space-y-3 text-[17px] leading-[1.47] mb-6">
+                  <li>从右上角向下轻扫以在 <span className="text-[#06c]">iPhone</span> 或 <span className="text-[#06c]">iPad</span> 上打开“控制中心”。在配备主屏幕按钮的 iPhone 上，从底部向上轻扫以打开“控制中心”。</li>
+                  <li>轻点“手电筒”按钮 <span className="inline-block w-3 h-4 bg-gray-400 rounded-sm"></span>。</li>
+                </ol>
+
+                {/* Fake Image Placeholder */}
+                <div className="bg-[#f5f5f7] rounded-3xl p-4 mb-6 flex justify-center">
+                  <div className="w-[280px] h-[580px] bg-black rounded-[40px] border-[8px] border-gray-800 relative overflow-hidden shadow-xl">
+                    {/* Dynamic Island */}
+                    <div className="absolute top-2 left-1/2 -translate-x-1/2 w-[100px] h-[30px] bg-black rounded-full z-20"></div>
+                    {/* Screen Content */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-blue-900 to-purple-900 opacity-80"></div>
+                    {/* Control Center UI Mock */}
+                    <div className="absolute inset-0 p-4 pt-12 flex flex-col gap-4">
+                      <div className="flex justify-between px-2 text-white text-xs">
+                        <span>无SIM卡</span>
+                        <div className="flex gap-1 items-center">
+                          <span>100%</span>
+                          <div className="w-5 h-2.5 border border-white/50 rounded-sm"></div>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="flex-1 bg-black/40 rounded-2xl p-3 grid grid-cols-2 gap-3 aspect-square backdrop-blur-md">
+                          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white">✈</div>
+                          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white">W</div>
+                          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white">B</div>
+                          <div className="w-10 h-10 bg-black/50 rounded-full flex items-center justify-center text-white">A</div>
+                        </div>
+                        <div className="flex-1 bg-black/40 rounded-2xl p-3 aspect-square backdrop-blur-md flex flex-col justify-center items-center">
+                          <span className="text-white/50 text-sm">未在播放</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="flex-1 bg-black/40 rounded-2xl p-3 flex items-center gap-3 backdrop-blur-md">
+                          <div className="w-8 h-8 bg-white/20 rounded-full"></div>
+                          <span className="text-white text-sm">专注模式</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-4 h-32">
+                        <div className="flex-1 bg-black/40 rounded-2xl p-3 flex flex-col justify-end items-center pb-4 backdrop-blur-md relative overflow-hidden">
+                          <div className="absolute bottom-0 left-0 right-0 h-[30%] bg-white"></div>
+                          <div className="w-6 h-6 text-black z-10">☀</div>
+                        </div>
+                        <div className="flex-1 bg-black/40 rounded-2xl p-3 flex flex-col justify-end items-center pb-4 backdrop-blur-md relative overflow-hidden">
+                          <div className="absolute bottom-0 left-0 right-0 h-[60%] bg-white"></div>
+                          <div className="w-6 h-6 text-black z-10">🔊</div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between mt-2">
+                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-blue-500">🔦</div>
+                        <div className="w-12 h-12 bg-black/40 rounded-full backdrop-blur-md"></div>
+                        <div className="w-12 h-12 bg-black/40 rounded-full backdrop-blur-md"></div>
+                        <div className="w-12 h-12 bg-black/40 rounded-full backdrop-blur-md"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <ol className="list-decimal pl-5 space-y-3 text-[17px] leading-[1.47] mb-6" start={3}>
+                  <li>要关闭手电筒，请再次轻点“手电筒”按钮 <span className="inline-block w-3 h-4 bg-gray-400 rounded-sm"></span>。</li>
+                </ol>
+
+                <p className="text-[17px] leading-[1.47] mb-4">
+                  你还可以从锁定屏幕打开手电筒：按住左下角的“手电筒”按钮 <span className="inline-block w-3 h-4 bg-gray-400 rounded-sm"></span>。
+                </p>
+
+                <p className="text-[17px] leading-[1.47] mb-10">
+                  如果你在打开“控制中心”时没有看到“手电筒”按钮 <span className="inline-block w-3 h-4 bg-gray-400 rounded-sm"></span>，则可以更改设置来添加这个按钮。前往“设置”&gt;“控制中心”，然后在可用控制项的列表中轻点“手电筒”。或者，当“控制中心”打开时，轻点并按住屏幕以<span className="text-[#06c]">自定义可用控制项</span>。
+                </p>
+
+                <p className="text-[17px] leading-[1.47] mb-10">
+                  <span className="text-[#06c]">灵动岛</span>在 iPhone 14 Pro 及更新 Pro 机型上提供。
+                </p>
+
+                <p className="text-[17px] leading-[1.47] mb-10 text-[#06c]">
+                  如果设备上的闪光灯无法正常工作，请了解该怎么做 &gt;
+                </p>
+
+                <h2 className="text-[28px] font-semibold leading-[1.14] tracking-tight mb-4">
+                  需要更多协助？
+                </h2>
+
+                <p className="text-[17px] leading-[1.47] mb-6">
+                  请详细描述一下你遇到的问题，我们会建议你接下来可以怎么做。
+                </p>
+
+                <p className="text-[17px] leading-[1.47] mb-12 text-[#06c]">
+                  获取建议 &gt;
+                </p>
+
+                <div className="text-[12px] text-gray-500 mb-8">
+                  发布日期：2025 年 12 月 16 日
+                </div>
+
+                <div className="border-t border-gray-200 py-4 flex items-center gap-4 text-sm">
+                  <span className="font-semibold">有帮助？</span>
+                  <button className="px-6 py-1 border border-[#06c] text-[#06c] rounded-full">是</button>
+                  <button className="px-6 py-1 border border-[#06c] text-[#06c] rounded-full">否</button>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="bg-[#f5f5f7] px-5 py-6 text-xs text-gray-500">
+                <div className="flex items-center gap-2 mb-4">
+                  <svg viewBox="0 0 14 44" width="12" height="44" className="fill-current"><path d="M13.0729 17.6822C13.0485 14.7619 15.4727 13.3344 15.5866 13.2612C14.1634 11.1813 11.9692 10.864 11.2206 10.8396C9.3496 10.6444 7.5193 11.9378 6.5513 11.9378C5.5589 11.9378 4.0703 10.864 2.5166 10.8884C0.5155 10.9128 -1.2578 12.0598 -2.2827 13.8412C-4.3814 17.4773 -2.722 22.846 -0.6721 25.8232C0.3284 27.2874 1.5079 28.9468 3.0616 28.898C4.5421 28.8492 5.1115 27.9463 6.8604 27.9463C8.5848 27.9463 9.1054 28.898 10.6591 28.8736C12.2616 28.8492 13.2621 27.3606 14.2383 25.8964C15.3852 24.2126 15.857 22.5776 15.8814 22.48C15.8326 22.48 13.0973 21.4307 13.0729 17.6822ZM9.431 8.2528C10.2526 7.2523 10.8057 5.8613 10.6593 4.4697C9.4635 4.5185 7.9993 5.275 7.1452 6.2755C6.3887 7.154 5.7379 8.5694 5.9087 9.936C7.2346 10.0336 8.6094 9.2527 9.431 8.2528Z" transform="translate(3 -4)"/></svg>
+                  <span>&gt;</span>
+                  <span>支持</span>
+                  <span>&gt;</span>
+                  <span>在 iPhone 或 iPad Pro 上打开或关闭手电筒</span>
+                </div>
+                <div className="mb-2">Copyright © 2026 Apple Inc. 保留所有权利。</div>
+                <div className="flex gap-3 flex-wrap">
+                  <span>隐私政策</span>
+                  <span className="border-l border-gray-300 pl-3">使用条款</span>
+                  <span className="border-l border-gray-300 pl-3">销售和退款</span>
+                  <span className="border-l border-gray-300 pl-3">站点地图</span>
+                </div>
               </div>
             </div>
           )}
@@ -793,11 +962,20 @@ export default function App() {
                 <label className="flex items-center gap-2 text-sm text-zinc-300">
                   <input 
                     type="radio" 
+                    checked={audienceScreenMode === 'apple'} 
+                    onChange={() => setAudienceScreenMode('apple')}
+                    className="w-4 h-4"
+                  />
+                  苹果官网伪装 (Apple Support)
+                </label>
+                <label className="flex items-center gap-2 text-sm text-zinc-300">
+                  <input 
+                    type="radio" 
                     checked={audienceScreenMode === 'article'} 
                     onChange={() => setAudienceScreenMode('article')}
                     className="w-4 h-4"
                   />
-                  自定义文章 (推荐，100%成功)
+                  自定义文章
                 </label>
                 
                 {audienceScreenMode === 'iframe' && (
