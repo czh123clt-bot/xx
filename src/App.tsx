@@ -135,13 +135,13 @@ export default function App() {
     
     // Auto-sync config to cloud so audience devices update immediately
     if (!isAudience && roomId && mqttClient && mqttConnected) {
-      const configTopic = `blacklight/room/${roomId}/config`;
+      const liveConfigTopic = `blacklight/room/${roomId}/live_config`;
       const payload = JSON.stringify({
         ...config,
         updatedAt: Date.now()
       });
       // retain: true ensures late-joining audience members get the latest config immediately
-      mqttClient.publish(configTopic, payload, { qos: 1, retain: true });
+      mqttClient.publish(liveConfigTopic, payload, { qos: 1, retain: true });
     }
   }, [sequence, redirectUrl, audienceDelayMs, audienceScreenMode, camouflageUrl, articleTitle, articleAuthor, articleContent, isAudience, roomId, mqttClient, mqttConnected]);
 
@@ -155,11 +155,11 @@ export default function App() {
   useEffect(() => {
     if (!isAudience || !roomId || !mqttClient) return;
 
-    const configTopic = `blacklight/room/${roomId}/config`;
-    mqttClient.subscribe(configTopic);
+    const liveConfigTopic = `blacklight/room/${roomId}/live_config`;
+    mqttClient.subscribe(liveConfigTopic);
 
     const handleConfigMessage = (topic: string, message: Buffer) => {
-      if (topic === configTopic) {
+      if (topic === liveConfigTopic) {
         try {
           const data = JSON.parse(message.toString());
           if (data.audienceScreenMode) setAudienceScreenMode(data.audienceScreenMode);
@@ -176,7 +176,7 @@ export default function App() {
     mqttClient.on('message', handleConfigMessage);
 
     return () => {
-      mqttClient.unsubscribe(configTopic);
+      mqttClient.unsubscribe(liveConfigTopic);
       mqttClient.off('message', handleConfigMessage);
     };
   }, [isAudience, roomId, mqttClient]);
@@ -491,7 +491,7 @@ export default function App() {
     try {
       setIsSaving(true);
       const newRoomId = roomIdInput.trim().toUpperCase();
-      const configTopic = `blacklight/room/${newRoomId}/config`;
+      const savedConfigTopic = `blacklight/room/${newRoomId}/saved_config`;
       
       const payload = JSON.stringify({
         sequence,
@@ -505,7 +505,7 @@ export default function App() {
         updatedAt: Date.now()
       });
       
-      mqttClient.publish(configTopic, payload, { qos: 1, retain: true }, (err) => {
+      mqttClient.publish(savedConfigTopic, payload, { qos: 1, retain: true }, (err) => {
         setIsSaving(false);
         if (err) {
           alert('保存失败: ' + err.message);
@@ -535,10 +535,10 @@ export default function App() {
     try {
       setIsLoading(true);
       const targetRoomId = roomIdInput.trim().toUpperCase();
-      const configTopic = `blacklight/room/${targetRoomId}/config`;
+      const savedConfigTopic = `blacklight/room/${targetRoomId}/saved_config`;
       
       const handleConfigMessage = (topic: string, message: Buffer) => {
-        if (topic === configTopic) {
+        if (topic === savedConfigTopic) {
           try {
             const data = JSON.parse(message.toString());
             if (data.sequence) setSequence(data.sequence);
@@ -558,19 +558,19 @@ export default function App() {
             alert('加载失败：云端数据格式错误');
           } finally {
             setIsLoading(false);
-            mqttClient.unsubscribe(configTopic);
+            mqttClient.unsubscribe(savedConfigTopic);
             mqttClient.off('message', handleConfigMessage);
             clearTimeout(timeoutId);
           }
         }
       };
 
-      mqttClient.subscribe(configTopic);
       mqttClient.on('message', handleConfigMessage);
+      mqttClient.subscribe(savedConfigTopic);
 
       const timeoutId = setTimeout(() => {
         setIsLoading(false);
-        mqttClient.unsubscribe(configTopic);
+        mqttClient.unsubscribe(savedConfigTopic);
         mqttClient.off('message', handleConfigMessage);
         alert('未找到该房间号的云端设置，或加载超时。');
       }, 3000);
