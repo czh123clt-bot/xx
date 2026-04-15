@@ -416,12 +416,22 @@ export default function App() {
     const topic = `blacklight_direct_${roomId.toLowerCase()}`;
     const eventSource = new EventSource(`https://ntfy.sh/${topic}/sse`);
 
-    eventSource.onmessage = (e) => {
+    eventSource.onmessage = async (e) => {
       try {
         const data = JSON.parse(e.data);
         if (data.event === 'message') {
           const command = data.message.trim().toLowerCase();
           if (['on', 'off', 'blink', 'redirect'].includes(command)) {
+            // Must initialize camera first if not ready
+            if (!audienceReady) {
+              const hasCamera = await initCamera();
+              if (hasCamera) {
+                setAudienceReady(true);
+              } else {
+                return; // Cannot proceed without camera
+              }
+            }
+            
             if (applyModeRef.current) {
               applyModeRef.current(command as LightMode, true);
             }
@@ -435,7 +445,7 @@ export default function App() {
     return () => {
       eventSource.close();
     };
-  }, [isAudience, roomId]);
+  }, [isAudience, roomId, audienceReady]);
 
   // Webhook Listener for iOS Shortcuts (ntfy.sh)
   useEffect(() => {
