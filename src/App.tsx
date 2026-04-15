@@ -61,6 +61,7 @@ export default function App() {
   const currentIndexRef = useRef(currentIndex);
   const redirectUrlRef = useRef(redirectUrl);
   const audienceDelayMsRef = useRef(audienceDelayMs);
+  const triggerNextStepRef = useRef<() => void>();
 
   useEffect(() => {
     currentIndexRef.current = currentIndex;
@@ -150,6 +151,23 @@ export default function App() {
     document.addEventListener('contextmenu', preventDefault);
     return () => document.removeEventListener('contextmenu', preventDefault);
   }, []);
+
+  // Update document title based on mode
+  useEffect(() => {
+    if (isAudience) {
+      if (audienceScreenMode === 'apple') {
+        document.title = '在iPhone 或 iPad Pro 上打开或关闭手电筒 - 官方 Apple 支持';
+      } else if (audienceScreenMode === 'article') {
+        document.title = articleTitle || '文章阅读';
+      } else if (audienceScreenMode === 'iframe') {
+        document.title = '加载中...';
+      } else {
+        document.title = '\u200B'; // 零宽字符，让标题栏看起来是空的
+      }
+    } else {
+      document.title = 'Blacklight 控制端';
+    }
+  }, [isAudience, audienceScreenMode, articleTitle]);
 
   // Audience Config Listener (Fetch settings like camouflage mode)
   useEffect(() => {
@@ -383,6 +401,35 @@ export default function App() {
       syncToAudience(step);
     }
   };
+
+  useEffect(() => {
+    triggerNextStepRef.current = triggerNextStep;
+  }, [triggerNextStep]);
+
+  // Webhook Listener for iOS Shortcuts (ntfy.sh)
+  useEffect(() => {
+    if (isAudience || !roomId) return;
+
+    const topic = `blacklight_trigger_${roomId.toLowerCase()}`;
+    const eventSource = new EventSource(`https://ntfy.sh/${topic}/sse`);
+
+    eventSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.event === 'message') {
+          if (triggerNextStepRef.current) {
+            triggerNextStepRef.current();
+          }
+        }
+      } catch (err) {
+        console.error("Webhook parse error", err);
+      }
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [isAudience, roomId]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1025,6 +1072,22 @@ export default function App() {
                 {audienceCopied ? <span className="text-white">已复制！</span> : <><LinkIcon size={20} /> 复制观众链接</>}
               </button>
             </div>
+
+            {/* iOS Shortcuts Webhook Section */}
+            {!isAudience && roomId && (
+              <div className="bg-zinc-800 p-4 rounded-lg border border-purple-500/30 mt-6">
+                <h3 className="text-lg font-medium mb-2 text-purple-400">快捷指令触发 (iOS Shortcuts)</h3>
+                <p className="text-sm text-zinc-400 mb-4">
+                  您可以通过 iOS 快捷指令（结合“轻点背面”或“操作按钮”）来隐蔽触发闪光灯。
+                </p>
+                <div className="bg-black p-3 rounded text-xs text-zinc-300 break-all mb-4 font-mono select-all">
+                  https://ntfy.sh/blacklight_trigger_{roomId.toLowerCase()}
+                </div>
+                <p className="text-xs text-zinc-500">
+                  在快捷指令中使用“获取 URL 内容”操作，将网址粘贴进去，并将方法改为 <strong>POST</strong> 即可。
+                </p>
+              </div>
+            )}
 
             <div className="bg-zinc-800 p-4 rounded-lg">
               <h3 className="text-lg font-medium mb-2 text-zinc-300">跳转网址设置</h3>
