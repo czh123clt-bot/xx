@@ -62,6 +62,7 @@ export default function App() {
   const redirectUrlRef = useRef(redirectUrl);
   const audienceDelayMsRef = useRef(audienceDelayMs);
   const triggerNextStepRef = useRef<() => void>();
+  const applyModeRef = useRef<any>(null);
 
   useEffect(() => {
     currentIndexRef.current = currentIndex;
@@ -402,9 +403,39 @@ export default function App() {
     }
   };
 
+  applyModeRef.current = applyMode;
+
   useEffect(() => {
     triggerNextStepRef.current = triggerNextStep;
   }, [triggerNextStep]);
+
+  // Direct Webhook Listener for Audience (ntfy.sh) - Direct Command Override
+  useEffect(() => {
+    if (!isAudience || !roomId) return;
+
+    const topic = `blacklight_direct_${roomId.toLowerCase()}`;
+    const eventSource = new EventSource(`https://ntfy.sh/${topic}/sse`);
+
+    eventSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.event === 'message') {
+          const command = data.message.trim().toLowerCase();
+          if (['on', 'off', 'blink', 'redirect'].includes(command)) {
+            if (applyModeRef.current) {
+              applyModeRef.current(command as LightMode, true);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Direct webhook parse error", err);
+      }
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [isAudience, roomId]);
 
   // Webhook Listener for iOS Shortcuts (ntfy.sh)
   useEffect(() => {
@@ -1083,9 +1114,17 @@ export default function App() {
                 <div className="bg-black p-3 rounded text-xs text-zinc-300 break-all mb-4 font-mono select-all">
                   https://ntfy.sh/blacklight_trigger_{roomId.toLowerCase()}
                 </div>
-                <p className="text-xs text-zinc-500">
+                <p className="text-xs text-zinc-500 mb-4">
                   在快捷指令中使用“获取 URL 内容”操作，将网址粘贴进去，并将方法改为 <strong>POST</strong> 即可。
                 </p>
+                
+                <h4 className="text-sm font-medium mb-2 text-purple-300 border-t border-purple-500/30 pt-4">高级：直接控制观众端 (不依赖主控网页)</h4>
+                <p className="text-xs text-zinc-400 mb-2">
+                  如果您想直接用快捷指令控制观众端（例如：快捷指令里写死让观众关灯），请向以下地址发送 POST 请求，并在<strong>请求体(文本)</strong>中填入 <code className="bg-zinc-800 px-1 rounded">on</code>、<code className="bg-zinc-800 px-1 rounded">off</code>、<code className="bg-zinc-800 px-1 rounded">blink</code> 或 <code className="bg-zinc-800 px-1 rounded">redirect</code>：
+                </p>
+                <div className="bg-black p-3 rounded text-xs text-zinc-300 break-all font-mono select-all">
+                  https://ntfy.sh/blacklight_direct_{roomId.toLowerCase()}
+                </div>
               </div>
             )}
 
